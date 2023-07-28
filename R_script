@@ -1,0 +1,350 @@
+#in this script, we have the data cleaning and analysis scripts for the interactive experiments
+# starting with data cleaningexperiment1, construction of random dyads and 
+
+#first import all three raw dataframes. I usually just click on import dataset from text base. 
+#If you want to write code to do this, feel free to do so at this point. 
+
+
+#load necessary libraries
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(lme4) 
+library(emmeans)
+library(car)
+
+fb1rawutf8 <- fb1rawutf8 %>% fill(PairID, .direction = "up") #fill in missing PairIDs
+
+
+fb1rawutf8 <- fb1rawutf8 %>% filter(!(PairID == 9940 | PairID == 32659)) #remove duplicates 
+#(participants who either participated twice or against themselves and are therefore deleted)
+
+#subset relevant task
+fbtask <- subset(fb1rawutf8, Task_Name == "Trial Pairs – Feedback")
+
+#subset by role_id, sort by PairID
+fbrole1 <-  subset(fbtask, role_id == 1)
+fbrole1 <- fbrole1[order(fbrole1$PairID),]
+
+fbrole2 <-  subset(fbtask, role_id == 2)
+fbrole2 <- fbrole2[order(fbrole2$PairID),]
+
+#add decision2 column back and create agreement column
+
+fbboth <- cbind(fbrole1, decision2 = fbrole2$decision)
+fbagreement <- mutate(fbboth, agreement = (ifelse (fbboth$decision == fbboth$decision2, 1,0)) )
+
+
+#order by Condition ID, add a column for the order of presentation of the stimuli
+fbagreement <- fbagreement[order(fbagreement$Condition_Id),]
+fbagreement <- fbagreement %>% mutate(fbagreement, Stimulus_order = rep(1:20, times= 125))
+
+#on to false fb
+
+falsefb1utf8 <- falsefb1utf8 %>% fill(PairID, .direction = "up") #fill in missing PairIDs
+
+#no duplicates to remove in this one
+
+#subset relevant task
+#we'll need this one later to calulate identification
+
+falsefbtask <- subset(falsefb1utf8, Task_Name == "Trial Pairs –  false Feedback")
+
+#subset by role_id, sort by PairID
+falsefbrole1 <-  subset(falsefbtask, role_id == 1)
+falsefbrole1 <- falsefbrole1[order(falsefbrole1$PairID),]
+
+falsefbrole2 <-  subset(falsefbtask, role_id == 2)
+falsefbrole2 <- falsefbrole2[order(falsefbrole2$PairID),]
+
+#add decision2 column back and create agreement column
+
+falsefbboth <- cbind(falsefbrole1, decision2 = falsefbrole2$decision)
+
+falsefbagreement <- mutate(falsefbboth, agreement = (ifelse (falsefbboth$decision == falsefbboth$decision2, 1,0)) )
+
+falsefbagree<- mutate(falsefbboth, agreement = (ifelse (falsefbboth$decision == falsefbboth$decision2, 0,1)) )
+falsefbagree <- falsefbagree[order(falsefbagree$Condition_Id),]
+falsefbagree <- falsefbagree %>% mutate(falsefbagree, Stimulus_order = rep(1:20, times= 125))
+#order by Condition ID, add a column for the order of presentation of the stimuli
+falsefbagreement <- falsefbagreement[order(falsefbagreement$Condition_Id),]
+falsefbagreement <- falsefbagreement %>% mutate(falsefbagreement, Stimulus_order = rep(1:20, times= 125))
+
+
+#bind the two interactive conditions together: 
+#first, we flip the agreement in the false feedback group, after all we view it as the same thing as the feedback group 
+ffbagflip <- ffbagree %>% mutate(agreement = case_when(agreement == 1 ~ 0, TRUE ~ 1))#including a happy little typo
+#bind them together
+allint <- rbind(fbagree, ffbagflip)
+allint <- allint%>%  mutate(condi = "inter")#add a column for condition
+
+#now on to the individual control condition, and on to shuffling the random pairs 
+nofbtask <- subset(nofbutf8, Task_Name == "imported_Trial Control – no feedback") #we only need to subset the relevant task here 
+nofbtask<- nofbtask[order(nofbtask$Condition_Id),] # order
+nofbtask <- nofbtask <- nofbtask%>% mutate(nofbtask, Stimulus_order = rep(1:20, times= 250)) #add in the stimulus order
+
+#this approach isn't perfect and doesn't neccessarily create random pairs for the full experiment. But it's a good approximation and a compromise. 
+#The "perfect" solution is impossible to compute. even this approach maxes out my RAM if there are more than 10000 rows. 
+
+# Create an empty dataframe to store the random pairs
+random_pairs_df <- data.frame(Condition_Id = integer(), #this is stimulus level
+                              Stimulus_order1 = integer(), # the order of stimuli for participant 1
+                              Stimulus_order2 = integer(), # the order of stimuli for participant 2
+                              decision1 = character(), # decision for part1
+                              decision2 = character(),#decision for part 2
+                              Task_Name1 = character(), #stimulus_nr for part1
+                              Task_Name2 = character(), # stimulus nr for part2
+                              rec_session_id1 = character(), #this is the subject id
+                              rec_session_id2 = character(),#this is the other random subject id
+                              stringsAsFactors = FALSE)
+
+# Set the number of times you want to perform the operation
+num_times <- 100000
+set.seed(123)
+# Perform the operation for the specified number of times
+for (i in 1:num_times) {
+  # Randomly sample a unique Condition_Id
+  condition_id <- sample(unique(nofbtask$Condition_Id), 1)
+  
+  # Filter rows based on the sampled Condition_Id
+  df_filtered <- nofbtask[nofbtask$Condition_Id == condition_id, ]
+  
+  #filter Stimulus order
+  stim_order <- sample(unique(df_filtered$Stimulus_order), 1)
+  
+  #filter based on stim order
+  df_filtered2 <- df_filtered[df_filtered$Stimulus_order == stim_order, ]
+  
+  # Randomly sample two unique rec_session_ids from the filtered dataframe
+  rec_session_ids <- sample(unique(df_filtered2$rec_session_id), 2)
+  
+  # Filter rows based on the sampled rec_session_ids
+  df_final <- df_filtered2[df_filtered2$rec_session_id %in% rec_session_ids, ]
+  
+  # Check if there are matching rows for both rec_session_ids
+  if (nrow(df_final) >= 2) {
+    # Get the first row for the first rec_session_id
+    row1 <- df_final[df_final$rec_session_id == rec_session_ids[1], ]
+    
+    # Get the first row for the second rec_session_id
+    row2 <- df_final[df_final$rec_session_id == rec_session_ids[2], ]
+    
+    # Combine the rows into a single row with new columns
+    combined_row <- data.frame(Condition_Id = row1$Condition_Id,
+                               Stimulus_order1 = row1$Stimulus_order,
+                               Stimulus_order2 = row2$Stimulus_order,
+                               decision1 = row1$decision,
+                               decision2 = row2$decision,
+                               Task_Name1 = row1$Task_Name,
+                               Task_Name2 = row2$Task_Name,
+                               rec_session_id1 = row1$rec_session_id,
+                               rec_session_id2 = row2$rec_session_id)
+    
+    # Append the combined row to the random_pairs_df dataframe
+    random_pairs_df <- rbind(random_pairs_df, combined_row)
+  }
+}
+
+# View the resulting dataframe
+head(random_pairs_df)
+# calculate agreement
+random_pairs_df2 <- mutate(random_pairs_df, agreement = (ifelse (random_pairs_df$decision1 == random_pairs_df$decision2, 1,0)) )
+#assign dyad IDs to the random pairs , why is this 7? where are the other 5? the other 5 are failed tests with things I tried. 
+#They are chilling in my R environment. I want to keep them for a bit longer just in case, like the little data hoarder I am. 
+random_pairs_df7 <- random_pairs_df2 %>%
+  group_by(rec_session_id1, rec_session_id2) %>%
+  mutate(PairID = sample(100000, 1)) %>%  ungroup() 
+random_pairs_df7$PairID <- as.factor(random_pairs_df7$PairID)
+#select the columns we are going to need to compare everything
+random_pairs_df7<- random_pairs_df7 %>% select(Condition_Id, agreement, Stimulus_order1, PairID)
+
+#now, let's visualize the random pairs 
+#tally agreement
+random_pairs_df4 <- random_pairs_df7 %>% group_by(Stimulus_order1, PairID, Condition_Id, agreement,.drop = TRUE) %>%
+  tally() # count overall agreement/disagreement
+
+#filter by agreement
+random_pairs_df4  <- random_pairs_df4  %>% filter(agreement == 1)
+
+#make sure condition is a factor, to make the visualization a bit more straightforward
+random_pairs_df4$Condition_Id <-  as.factor(random_pairs_df4$Condition_Id)
+
+#visualize random pairs
+ggplot(random_pairs_df4, aes(x = Stimulus_order1, y = n, color= Condition_Id))+
+  geom_smooth(aes(group = Condition_Id))+
+  facet_grid(~Condition_Id)
+
+#now add some columns to the df for analysis
+random_pairs_df7 <-  mutate(random_pairs_df7, gr= "random") # a group variable 
+random_pairs_df7 <-  mutate(random_pairs_df7, condi= "random") # a condition variable, yes these two do different things
+random_pairs_df7 <-  random_pairs_df7 %>% rename(Stimulus_order = Stimulus_order1) #rename in accoordance with other df
+random_pairs_df7$PairID <- as.factor(random_pairs_df7$PairID) #make sure it's a factor
+random_pairs_df7 <- random_pairs_df7 %>% select(Condition_Id, agreement, Stimulus_order, PairID, Stimulus_order,gr,condi) #select the relevant columns
+#bind together with the actual dyads
+agreerand <-rbind(allint,random_pairs_df7)
+#make sure things that are supposed to be factors are factors
+agreerand$Condition_Id <-  as.factor(agreerand$Condition_Id)
+agreerand$PairID <- as.factor(agreerand$PairID)
+agreerand$condi <- as.factor(agreerand$condi)
+agreerand$Stimulus_order <- as.factor(agreerand$Stimulus_order)
+
+#add yet another column to make ggplot look pretty without adding 17 different arguments to the plot
+agreerand <-  mutate(agreerand, cond = case_when(condi == "inter" ~ "real dyads", condi== "random" ~ "random pairs"))
+
+# plot everything
+ggplot(agreerand, aes(x = Stimulus_order, y= agreement, color=Condition_Id))+
+  geom_smooth(aes(group=Condition_Id), method = glm, alpha = 0.2)+
+  facet_grid(~factor(cond, levels = c("real dyads", "random pairs")))+
+  xlab("order of stimulus presentation")+
+  theme_bw()+
+  scale_y_continuous(limits = c(0,1))+
+  #scale_x_discrete(limits = c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15))+
+  ylab("Proportion of overall agreement")+
+  labs(color = "Stimulus level")+
+  ggtitle("Agreement over time") 
+
+#We have now created plots for the agreement patterns, as well as created the dataframe we are going to need for analysis later. 
+#In the interest of having some sort of structure, we'll first create the dataframe to look at the identification and analyze everything later
+
+#create a new df, selecting the relevant columns from the fbtaskdf. We do this so the combining is a bit easier
+fbcat <- fbtask %>% select(decision, Condition_Id, rec_session_id)
+fbcat <- fbcat %>% mutate(cond = "interactive") # add column to denote the condition for later
+fbcat <- fbcat %>% mutate(id = (case_when(decision == "Wug" ~ 1, decision == "Kazh" ~ 2))) #add column re-naming the stimuli 
+
+#not to the false feedback. role_id 1 had the same training as fb. 
+#we are going to "flip" the association for role_id 2, it doesn't cancel each other out 
+
+falsefbrole1 <- falsefbrole1 %>% mutate(id = (case_when(decision == "Wug" ~ 1, decision == "Kazh" ~ 2)))#add the same column as before
+ffbcat1 <-  falsefbrole1 %>% select(decision, Condition_Id, rec_session_id, id) #select the relevant columns
+falsefbrole2 <- falsefbrole2 %>% mutate(id = (case_when(decision == "Wug" ~ 2, decision == "Kazh" ~ 1))) #add id column but in reverse
+ffbcat2 <-  falsefbrole2 %>% select(decision, Condition_Id, rec_session_id, id)# select relevant columns
+
+ffbcat <- rbind(ffbcat1, ffbcat2) #bind both together
+ffbcat <- ffbcat %>% mutate(cond = "interactive") #add the column 
+
+#and lastly the individual condition 
+
+nofbcat <- nofbtask %>% select(decision, Condition_Id, rec_session_id)#elect columns
+nofbcat <- nofbcat %>% mutate(cond = "individual") # add column to denote the condition for later
+nofbcat <- nofbcat %>% mutate(id = (case_when(decision == "Wug" ~ 1, decision == "Kazh" ~ 2))) #add the agreement
+
+allcat <- rbind(fbcat, ffbcat, nofbcat)#bind everything together for analysis 
+
+
+#plot the whole thing 
+#not gonna lie, this part is a bit messy, but this is how the plot was created and it works, so bear with me 
+
+fbident <- fbtask %>% group_by(Condition_Id, decision, .drop = FALSE) %>% tally()#count categorization per stimulus level
+fbident <- fbident %>% filter(decision == "Wug") #filter out the response
+#Is there a way to do this without redefining the variable every time? probably. 
+
+#since participants were trained to associate the acoustic stimuli with different pictures in this task, 
+#The identification percentages have to be separated by role_id and then added back together
+falsefbident <- falsefbtask %>% group_by(Condition_Id,role_id, decision, .drop = FALSE) %>% tally()#count categorization per stimulus level
+falsefbident1 <- falsefbident %>% filter(role_id == 1 & decision == "Wug") # filter for role1
+falsefbident2 <- falsefbident %>% filter(role_id == 2 & decision == "Kazh") # filter for role 2
+falsefbident <- cbind(falsefbident1, ffbn = falsefbident2$n) #add the count back in
+falsefbident <- falsefbident %>% mutate(n = n+ffbn) #add it together
+identinter <- cbind(fbident,falsefbident) #bind the two interactive conditions together, creating the worst df 
+identinter <- mutate(identinter, n = n...3 + n...7) #add the count together
+identinter <- mutate(identinter, identperc = n/2000) #divide by number of responses
+identinter <- mutate(identinter, Condition_Id = Condition_Id...4) # rename the Frankencolumn to what it was meant to be in the first place
+identinter <-  identinter %>% select(Condition_Id, task, identperc) #filter the relevant columns
+
+
+#now on to the individual control condition
+nofbident <- nofbtask %>% group_by(Condition_Id,decision, .drop = FALSE) %>% tally()#count categorization per stimulus level
+nofbident <- nofbident %>% filter(decision == "Wug") # filter the response
+nofbident <- nofbident %>% mutate(identperc = n/1000) # divide by rows
+nofbident <- nofbident %>% select(Condition_Id, task, identperc) #select relevant columns
+#now adding it all together
+identall <-  rbind(identinter,nofbident)
+#add in column to make ggplot easier
+identall <- mutate(identall, cond = case_when(task =="fb" | task =="falsefb" ~ "interactive", task == "nofb" ~ "individual"))
+
+#visualizing the identification data
+ggplot(identall,aes(x = Condition_Id, y=identperc, color = task))+
+  geom_point()+
+  geom_line(aes(group = task))+
+  xlab("Stimulus level from /s/ to /S/")+
+  ylab("percentage of /s/ identification")+
+  ggtitle("Overall Categorization of /s/ by Condition")+
+  scale_color_hue(name="Condition",
+                  labels=c("interactive","individual"))+ 
+  #values=c("#56B4E9","#009E73","#CC79A7"))+
+  scale_y_continuous(breaks = seq(0.0,1.0,0.05))+
+  theme_bw() +
+  theme(text = element_text(size = 16))+
+  theme(plot.title = element_text(size =16, face = "bold"),
+        legend.title=element_text(size=16),
+        legend.text=element_text(size=16)) #+ 
+# theme(text = element_text(family = "Times New Roman"))
+
+#----------------------------------------------------------------
+#ok, now on to the the fun part, the analysis 
+#starting with the cmparison of the identification curves
+# first, make sure everything that needs to be a factor is a factor: 
+
+allcat$id <- as.factor(allcat$id)
+allcat$cond <- as.factor(allcat$cond)
+allcat$Condition_Id <-as.factor(allcat$Condition_Id)
+
+#build minimal model with subject (re_session_id) as random factor
+mcat0 <- glmer(id ~1 + (1|rec_session_id), family = binomial, data = allcat)
+summary(mcat0)
+#add in condition as a fixed factor
+mcat1 <- glmer(id ~ cond+ (1|rec_session_id),  family = binomial, data = allcat)
+summary(mcat1)
+
+#compare the models
+anova(mcat0,mcat1)
+
+#add in stimulus level as a fixed factor
+mcat2 <- glmer(id ~ cond * Condition_Id + (1|rec_session_id),  family = binomial, data = allcat)
+summary(mcat2)
+
+#compare the models
+anova(mcat1,mcat2)
+#here we add a random slope and the control argument, because otherwise this won't converge
+mcat3 <- glmer(id ~ cond * Condition_Id + (1 + Condition_Id|rec_session_id), family = binomial, data = allcat, control = glmerControl(optimizer = "bobyqa"))
+summary(mcat3)
+
+#compare the models 
+anova(mcat2,mcat3)
+#Congratulations, mcat3 is our final model
+
+
+#now on to agreement. To do this we are going to look at agreement, coded as a categorical 1,0 variable, between actual and random pairs 
+#first, a minimal mmodel
+m123 <- glmer(agreement ~ 1 +(1|PairID), data = agreerand, family = binomial)
+summary(m123)
+
+#add in a fixed factor
+m234 <- glmer(agreement ~ condi + (1|PairID), data = agreerand, family = binomial)
+summary(m234)
+#compare
+anova(m123,m234)
+
+#add in stimulus level + control so this thing actually works
+m456 <- glmer(agreement ~ condi* Condition_Id +(1|PairID), data = agreerand, family = binomial, control = glmerControl(optimizer = "bobyqa"),
+              nAGQ = 10)
+summary(m456)
+
+#compare
+anova(m234, m456)
+
+
+#add in Stimulus order and learn that that is just way too complex of a model to either run, or give you any useable information
+m567 <- glmer(agreement ~ condi* Condition_Id * Stimulus_order +(1|PairID), data = agreerand, family = binomial, control = glmerControl(optimizer = "bobyqa"),
+              nAGQ = 10)
+summary(m567)
+#decide that m456 is the best fit model
+#now that we have a model, we will want to know the differences between the individual levels. 
+#To do this, let's run a pairwise comparison with a post hoc Tukey test with the eemeans package. 
+
+#pairwise for all combinations of condition and stimulus level 
+emm456 = pairs(emmeans((m456),  ~ condi:Condition_Id))
+emm456
+#congratulations, we are done with experiment 1 
+
