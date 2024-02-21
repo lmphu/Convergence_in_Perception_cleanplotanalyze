@@ -1,7 +1,12 @@
 #in this script, we have the data cleaning and analysis scripts for the interactive experiments
 # starting with data cleaningexperiment1, construction of random dyads and 
 
-#first import all three raw dataframes. I usually just click on import dataset from text base. 
+#first import all three raw dataframes.
+
+fb1rawutf8 <- read.csv("~/Desktop/Dissertation/data/fb1rawutf8.csv", stringsAsFactors=TRUE)
+falsefb1utf8 <- read.csv("~/Desktop/Dissertation/data/falsefb1utf8.csv", stringsAsFactors=TRUE)
+nofbutf8 <- read.csv("~/Desktop/Dissertation/data/nofbutf8.csv", stringsAsFactors=TRUE)
+
 #If you want to write code to do this, feel free to do so at this point. 
 
 
