@@ -15,9 +15,9 @@ library(data.table)
 #This analysis only concerns the interactive condition
 #the corresponding dfs are: 
 
-#so the df from labvanced came with one column "Task_Name" that contained all the info on which task (interactive or post-test) this was, 
+#The df from labvanced came with one column "Task_Name" that contained all the info on which task (interactive or post-test) this was, 
 #which treatment (fb or ffb) this was, and which of the stimulus blocks it was. In a first step I separate this column into three different ones for each piece of information
-ffb2<-  separate(fffbexp_2, Task_Name, sep = "_", into=c("task", "cond", "task_block")) 
+ffb2<-  separate(ffb2raw, Task_Name, sep = "_", into=c("task", "cond", "task_block")) 
          
 #now just subset the actual tasks 
 ffb2 <-  ffb2 %>% subset(task == "Long" | task == "Trial")
@@ -96,9 +96,10 @@ summary(newfb50)
 
 
 #separate out task 
-fb2 <-  separate(newfb50, Task_Name, sep = "_", into=c("task", "cond", "task_block"))
+fb2 <-  separate(fb2raw, Task_Name, sep = "_", into=c("task", "cond", "task_block"))
 fb2task <-  fb2 %>% subset(task == "Long" | task == "Trial")
 
+#select roles and mathc them together to calculate agreement. 
 fb2role1 <-  subset(fb2task, role_id == 1)
 fb2role1 <- fb2role1[order(fb2role1$multi_user_group_id),]
 
@@ -112,6 +113,7 @@ fb2agreement <- mutate(fb2both, agreement = (ifelse (fb2both$decision == fb2both
 fb2fil <- fb2agreement %>% select(Trial_Nr, task, task_block, Condition_Id, decision, decision2, multi_user_group_id, agreement)
 fb2fil <-  fb2fil %>% mutate(fb2fil, condition = 'fb')
 
+#write to desktop
 write.csv(nfbfil, "/Users/lenahuttner/Desktop/Dissertation/data/nfbfil.csv")
 write.csv(fb2ord, "/Users/lenahuttner/Desktop/Dissertation/data/fb2ord.csv")
 
