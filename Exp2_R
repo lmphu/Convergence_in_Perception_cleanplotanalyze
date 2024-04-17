@@ -1,8 +1,7 @@
 #hello and welcome to the data cleaning and analysis for exp 2. 
-#Once again, I am not a programmer, this may not be pretty, but it works. 
+#this may not be pretty, but it works. 
 #on to the code: 
 #load the libraries that you will need
-
 
 library(dplyr)
 library(tidyr)
@@ -10,16 +9,14 @@ library(ggplot2)
 library(lme4)
 library(lmerTest)
 library(emmeans)
+library(data.table)
 
 #start by loading the dfs in whichever way you see fit 
-# have a look at things
-summary(ffbexp_2)
-#so this is the messy part. I had several dataframes for each condition, because I did preliminary analyses and did not think to just download the entire dataset again
-#I did the same operation several times to dfs with different participants and bound them together. Here is what I did to each part of the df 
-
+#This analysis only concerns the interactive condition
+#the corresponding dfs are: 
 
 #so the df from labvanced came with one column "Task_Name" that contained all the info on which task (interactive or post-test) this was, 
-#which condition (fb or ffb) this was, and which of the stimulus blocks it was. In a first step I separate this column into three different ones for each piece of information
+#which treatment (fb or ffb) this was, and which of the stimulus blocks it was. In a first step I separate this column into three different ones for each piece of information
 ffb2<-  separate(fffbexp_2, Task_Name, sep = "_", into=c("task", "cond", "task_block")) 
          
 #now just subset the actual tasks 
@@ -53,14 +50,21 @@ ffbclean <-  folffbclean %>% mutate(ffb2clean, condition = 'ffb')
 #now here is the controversial part. I wanted to add an order to things, the order of trials from 1 to 300. 
 #normally it should not be a problem to add a column that just repeats the numbers from 1 to 300 
 #for some reason it was. 
+
+
 #so here is the slightly controversial bit: 
 #I wrote the df to csv
 write.csv(ffb2clean, "/Users/lenahuttner/Desktop/Dissertation/data/ffb2clean.csv")
 #then opened the file in excel and copy-pasted the numbers 1 through 300 to every dyad. which also gave me time to check that i had 300 rows per dyad and had not messed up somehow
-#i then read the resulting file back into R 
+#I then read the resulting file back into R 
+
+
+#you also hve this data frame
 folffbord <- read.csv("~/Desktop/Dissertation/data/folffbord.csv", sep=";", stringsAsFactors=TRUE) #import dataset
 # create "flipped" df, which you will need to combine all dfs together
 ffbflip <- folffbord %>% mutate(agreement = case_when(agreement == 1 ~ 0, TRUE ~ 1))
+
+
 # now on to visualizing the whole thing once. 
 folffbconv <- folffbord %>% group_by(condgg,task, Condition_Id, Trial_order, agreement,  .drop = TRUE) %>%
   tally() # count overall agreement
@@ -68,8 +72,6 @@ folffbconv  <- folffbconv  %>% filter(agreement == 1)
 folffbconv  <- folffbconv  %>% mutate(convperc = n/25)
 
 folffbconv$Condition_Id <- as.factor(folffbconv$Condition_Id )
-
-
 
 
 ggplot(folffbconv, aes(x= Trial_order, y = convperc, color = Condition_Id))+
@@ -86,21 +88,21 @@ ggplot(folffbconv, aes(x= Trial_order, y = convperc, color = Condition_Id))+
   ggtitle("False feedback - Agreement over time ")
 
 
-#now create a "flip" df, recoding agreement and diasgreement to combine it with the feedback one later on 
 
 
 #now on to the fb condition
 #have a look at things
 summary(newfb50)
 
+
 #separate out task 
 fb2 <-  separate(newfb50, Task_Name, sep = "_", into=c("task", "cond", "task_block"))
-fb2task <-  newfb %>% subset(task == "Long" | task == "Trial")
+fb2task <-  fb2 %>% subset(task == "Long" | task == "Trial")
 
 fb2role1 <-  subset(fb2task, role_id == 1)
-fb2role1 <- fbr2ole1[order(fb2role1$multi_user_group_id),]
+fb2role1 <- fb2role1[order(fb2role1$multi_user_group_id),]
 
-fb2role2 <-  subset(newfbtask, role_id == 2)
+fb2role2 <-  subset(fb2task, role_id == 2)
 fb2role2 <- fb2role2[order(fb2role2$multi_user_group_id),]
 
 fb2both <- cbind(fb2role1, decision2 = fb2role2$decision)
@@ -111,9 +113,10 @@ fb2fil <- fb2agreement %>% select(Trial_Nr, task, task_block, Condition_Id, deci
 fb2fil <-  fb2fil %>% mutate(fb2fil, condition = 'fb')
 
 write.csv(nfbfil, "/Users/lenahuttner/Desktop/Dissertation/data/nfbfil.csv")
+write.csv(fb2ord, "/Users/lenahuttner/Desktop/Dissertation/data/fb2ord.csv")
 
-# do the excel thing, which, by the way, is going to turn out to be redundant. 
-fb2ord <- read.csv("~/Desktop/Dissertation/data/fb2ord.csv", sep=";", stringsAsFactors=TRUE) #import dataset
+# do the excel thing 
+fb2ord <- read.csv("/Users/lenahuttner/Desktop/Dissertation/data/fbcorrupt.csv", sep=";", stringsAsFactors=TRUE) #import dataset
 
 
 fb2conv <- fb2ord %>% group_by(task, Trial_Nr, Trial_order, Condition_Id, agreement,  .drop = TRUE) %>%
@@ -142,7 +145,11 @@ ggplot(fb2conv, aes(x= Trial_order, y = convperc, color = Condition_Id))+
   labs(color = "Condition")+
   ggtitle("Feedback - Agreement over time ")
 
-convall <- rbind(fb2conv, ffbflip)
+
+ffbflip$Condition_Id <- as.factor(ffbflip$Condition_Id)
+convall <- rbind(fb2ord, ffbflip)
+
+fb250 <-  read.csv("/Users/lenahuttner/Desktop/Dissertation/data/fbcorrupt.csv", sep=";", stringsAsFactors=TRUE)
 
 #create the random dyads from the fb condition
 
@@ -150,13 +157,12 @@ convall <- rbind(fb2conv, ffbflip)
 #The "perfect" solution is impossible to compute. even this approach maxes out my RAM if there are more than 10000 rows. 
 
 # Create an empty dataframe to store the random pairs
+# Create an empty dataframe to store the random pairs
 random_pairs_df_exp2 <- data.frame(Condition_Id = integer(), #this is stimulus level
-                                   Stimulus_order1 = integer(), # the order of stimuli for participant 1
-                                   Stimulus_order2 = integer(), # the order of stimuli for participant 2
-                                   decision1 = character(),#decision for part1 
-                                   Task_Nr =character(),# stimulus block
-                                   Trial_Nr = character(),# trial within the stimulus block
+                                   decision1 = character(),# decision for part1
                                    decision2 = character(),#decision for part 2
+                                   Task_Nr =character(),
+                                   Trial_Nr = character(),
                                    Task_Name1 = character(), #stimulus_nr for part1
                                    Task_Name2 = character(), # stimulus nr for part2
                                    rec_session_id1 = character(), #this is the subject id
@@ -185,34 +191,32 @@ for (i in 1:num_times) {
   df_filtered3 <-  df_filtered2[df_filtered2$Trial_Nr== trial_nr, ]
   
   # Randomly sample two unique rec_session_ids from the filtered dataframe
-  rec_session_ids <- sample(unique(df_filtered3$multi_user_group_id), 2)
+  rec_session_ids <- sample(unique(df_filtered3$rec_session_id), 2)
   
   
   # Filter rows based on the sampled rec_session_ids
-  df_final <- df_filtered3[df_filtered3$multi_user_group_id %in% rec_session_ids, ]
+  df_final <- df_filtered3[df_filtered3$rec_session_id %in% rec_session_ids, ]
   
   # Check if there are matching rows for both rec_session_ids
   if (nrow(df_final) >= 2) {
     # Get the first row for the first rec_session_id
-    row1 <- df_final[df_final$multi_user_group_id == rec_session_ids[1], ]
+    row1 <- df_final[df_final$rec_session_id == rec_session_ids[1], ]
     
     # Get the first row for the second rec_session_id
-    row2 <- df_final[df_final$multi_user_group_id == rec_session_ids[2], ]
+    row2 <- df_final[df_final$rec_session_id == rec_session_ids[2], ]
     
     
     
     # Combine the rows into a single row with new columns
     combined_row <- data.frame(Condition_Id = row1$Condition_Id,
-                               #Stimulus_order1 = row1$Trial_order,
-                               #Stimulus_order2 = row2$Trial_order,
                                decision1 = row1$decision,
                                decision2 = row2$decision,
                                Task_Nr = row1$Task_Nr,
                                Trial_Nr = row1$Trial_Nr,
-                               Task_Name = row1$Task_Name,
-                               #Task_Name2 = row2$Task_Name,
-                               rec_session_id1 = row1$multi_user_group_id,
-                               rec_session_id2 = row2$multi_user_group_id)
+                               Task_Name = row1$task,
+                               Task_Name2 = row2$task,
+                               rec_session_id1 = row1$rec_session_id,
+                               rec_session_id2 = row2$rec_session_id)
     
     # Append the combined row to the random_pairs_df dataframe
     random_pairs_df_exp2 <- rbind(random_pairs_df_exp2, combined_row)
@@ -229,46 +233,50 @@ random_pairs_df_exp2_7 <- random_pairs_df_exp2_2 %>%
   group_by(rec_session_id1, rec_session_id2) %>%
   mutate(PairID = sample(100000, 1)) %>%  ungroup() 
 random_pairs_df_exp2_7$PairID <- as.factor(random_pairs_df_exp2_7$PairID)
-#give the df the same order marker as the other two dfs 
+
+#give the df the same order marker, as the other two experiment have
 random_pairs_df_exp2_7 <- random_pairs_df_exp2_7 %>% 
-  mutate(task_order =  case_when(Task_Name == "Trial_Feedback_1"~ "A", 
-                                 Task_Name == "Trial_Feedback_2"~ "B",
-                                 Task_Name == "Trial_Feedback_3"~ "C",
-                                 Task_Name == "Trial_Feedback_4"~ "D",
-                                 Task_Name == "Trial_Feedback_5"~"E",
-                                 Task_Name == "Trial_Feedback_6"~ "F",
-                                 Task_Name == "Trial_Feedback_7"~ "G",
-                                 Task_Name == "Trial_Feedback_8"~ "H",
-                                 Task_Name == "Trial_Feedback_9"~ "I",
-                                 Task_Name == "Trial_Feedback_10"~ "J",
-                                 Task_Name == "Long_FB_1"~ "K",
-                                 Task_Name == "Long_FB_2"~ "L",
-                                 Task_Name == "Long_FB_3"~ "M",
-                                 Task_Name == "Long_FB_4"~ "N",
-                                 Task_Name == "Long_FB_5"~ "O"))
+  mutate(task_order =  case_when(Task_Nr == 8 ~ "A", 
+                               Task_Nr == 9 ~ "B",
+                               Task_Nr == 10 ~ "C",
+                               Task_Nr == 11 ~ "D",
+                               Task_Nr == 12 ~ "E", 
+                               Task_Nr == 13 ~ "F",
+                               Task_Nr == 14 ~ "G",
+                               Task_Nr == 15 ~"H",
+                               Task_Nr == 16~ "I",
+                               Task_Nr == 17~ "J",    #wait, what happened to 18? 18 was the instructions to the task
+                             Task_Nr == 19 ~"K", 
+                               Task_Nr == 20 ~ "L",
+                               Task_Nr == 21 ~"M",
+                               Task_Nr == 22 ~"N",
+                               Task_Nr == 23 ~ "O")) 
+
 
 #also the same task names
 random_pairs_df_exp2_7 <- random_pairs_df_exp2_7 %>% 
-  mutate(condgg =  case_when(Task_Name == "Trial_Feedback_1" | 
-                               Task_Name == "Trial_Feedback_2"|
-                               Task_Name == "Trial_Feedback_3"|
-                               Task_Name == "Trial_Feedback_4"|
-                               Task_Name == "Trial_Feedback_5"|
-                               Task_Name == "Trial_Feedback_6"|
-                               Task_Name == "Trial_Feedback_7"|
-                               Task_Name == "Trial_Feedback_8"|
-                               Task_Name == "Trial_Feedback_9"|
-                               Task_Name == "Trial_Feedback_10"~ "interactive",
-                             Task_Name == "Long_FB_1" |
-                               Task_Name == "Long_FB_2"|
-                               Task_Name == "Long_FB_3"|
-                               Task_Name == "Long_FB_4"|
-                               Task_Name == "Long_FB_5"~ "long"))
+  mutate(condgg =  case_when(Task_Nr == 8 | 
+                               Task_Nr == 9|
+                               Task_Nr == 10|
+                               Task_Nr == 11|
+                               Task_Nr == 12|
+                               Task_Nr == 13|
+                               Task_Nr == 14|
+                               Task_Nr == 15|
+                               Task_Nr == 16|
+                               Task_Nr == 17~ "interactive",    #wait, what happened to 18? 18 was the instructions to the task
+                             Task_Nr == 19 |
+                               Task_Nr == 20|
+                               Task_Nr == 21|
+                               Task_Nr == 22|
+                               Task_Nr == 23 ~ "long")) 
+
+
 #add a column for condition
 random_pairs_df_exp2_7 <- random_pairs_df_exp2_7 %>% 
   mutate(condi = "random")
 
-#also add column tot he other df of actual dyads
+#also add column to the other df of actual dyads
 
 convall <- convall%>% 
   mutate(condgg =  case_when(task_order == "A" | 
@@ -289,16 +297,18 @@ convall <- convall%>%
 
 
 #and a name
-convall <- convall>% 
-  mutate(condi = "real dyads")
+convall <- convall%>% mutate(condi = "real dyads")
 #subset the columns that I will need to bind both dfs
 dyads_bind <-  convall %>% select (agreement, multi_user_group_id, task_order, condgg, condi, Trial_Nr, Condition_Id) 
 dyads_bind <- dyads_bind %>% rename(PairID = multi_user_group_id)
 #select columns I will need from the random pairs 
+dyads_bind$Condition_Id <- as.factor(dyads_bind$Condition_Id)
 random_bind <- random_pairs_df_exp2_7 %>% select(agreement, PairID, task_order,condgg, condi, Trial_Nr, Condition_Id)
+random_bind$Condition_Id <- as.factor(random_bind$Condition_Id)
 
-#
+#bind real and random dyads together
 alldyads <- rbind(dyads_bind,random_bind)
+#make sure everything that needs to bea factor is a factor
 alldyads$Condition_Id <-  as.factor(alldyads$Condition_Id)
 alldyads$condgg <-  as.factor(alldyads$condgg)
 alldyads$condi <- as.factor(alldyads$condi)
@@ -340,11 +350,12 @@ ggplot(alldyads, aes(x = order, y = agreement, color = Condition_Id))+
 #construct minimal model
 
 mmini <-  glmer(agreement ~ 1 +(1|PairID), family = binomial, data = alldyads)
-
+summary(mmini)
 #now add things to it
 #first the between group factor
 
 m098 <-  glmer(agreement ~  condi + (1|PairID), family = binomial, data = alldyads)
+summary(m098)
 
 #anova 
 
@@ -353,7 +364,7 @@ anova(mmini, m098)
 #add one within group factor, and also an optimizer for good measure 
 
 m09 <-  glmer(agreement ~  condi * condgg + (1|PairID), family = binomial, data = alldyads,control = glmerControl(optimizer = "bobyqa"))
-              
+summary(m09)             
  # anova 
 anova(m098, m09)
               
@@ -371,5 +382,33 @@ anova(m09, m789)
 #et voilà we have out model
 
 #now compare all the conditions
-emm789 = pairs(emmeans((m789),  ~ condi:Condition_Id:condgg))
+emm789 = pairs(emmeans((m789),  ~ condi*Condition_Id*condgg))
 emm789
+as.data.frame(emm789)
+write.csv(emm789, "/Users/lenahuttner/Desktop/Dissertation/data/emmexp2.csv") #save the whole thing
+
+#and now filter out the ones that you actually want and then ask chatGPT to turn the output into Latex table format
+target_strings <- c("random 1 interactive - real dyads 1 interactive",   
+                    "random 2 interactive - real dyads 2 interactive", 
+                    "random 3 interactive - real dyads 3 interactive", 
+                    "random 4 interactive - real dyads 4 interactive", 
+                    "random 5 interactive - real dyads 5 interactive", 
+                    
+                    "random 1 long - real dyads 1 long",
+                    "random 2 long - real dyads 2 long", 
+                    "random 3 long - real dyads 3 long",
+                    "random 4 long - real dyads 4 long",
+                    "random 5 long - real dyads 5 long",
+                    
+                    "real dyads 1 interactive - real dyads 1 long",
+                    "real dyads 2 interactive - real dyads 2 long",
+                    "real dyads 3 interactive - real dyads 3 long",
+                    "real dyads 4 interactive - real dyads 4 long",
+                    "real dyads 5 interactive - real dyads 5 long")
+
+emm789 <- as.data.table(emm789)
+emm789_filt <- emm789[grepl(paste(target_strings, collapse = "|"), contrast)]
+
+# Print the filtered data frame
+print(emm789_filt)
+
